@@ -1,0 +1,136 @@
+name: CI
+
+on:
+  push:
+    branches: [main, "phase/*"]
+  pull_request:
+    branches: [main]
+
+# Cancel in-progress runs for the same branch when a new push arrives.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ── Linting ─────────────────────────────────────────────────────────────────
+  lint:
+    name: Python lint (ruff)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install ruff
+        run: pip install ruff==0.4.10
+      - name: Check style
+        run: ruff check gpuforge/ tests/ benchmarks/
+      - name: Check formatting
+        run: ruff format --check gpuforge/ tests/ benchmarks/
+
+  # ── Type checking ────────────────────────────────────────────────────────────
+  typecheck:
+    name: Type check (mypy)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install torch==2.3.1 --index-url https://download.pytorch.org/whl/cpu
+          pip install pydantic>=2.5 numpy>=1.26 mypy>=1.10
+      - name: Run mypy
+        run: mypy gpuforge/ --ignore-missing-imports --no-strict-optional
+
+  # ── CPU unit tests ───────────────────────────────────────────────────────────
+  test-cpu:
+    name: CPU unit tests
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.10", "3.11", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install torch==2.3.1 --index-url https://download.pytorch.org/whl/cpu
+          pip install pydantic>=2.5 numpy>=1.26 pytest>=8.0 pytest-cov>=5.0 hypothesis>=6.100
+      - name: Install package
+        run: pip install -e . --no-deps
+      - name: Run tests (CPU only, skip GPU marks)
+        run: |
+          pytest tests/ -v --tb=short -m "not gpu" \
+            --cov=gpuforge --cov-report=term-missing
+      - name: Upload coverage
+        uses: codecov/codecov-action@v4
+        if: matrix.python-version == '3.11'
+        with:
+          fail_ci_if_error: false
+
+  # ── C++ skeleton check (clang-format) ───────────────────────────────────────
+  # No CUDA kernels yet — just verify the CMake skeleton is parseable.
+  cpp-check:
+    name: CMake syntax check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install cmake
+        run: sudo apt-get install -y cmake
+      - name: Check CMake syntax (configure only, no build)
+        run: |
+          cmake -S . -B _cmake_check \
+            -DGPUFORGE_BUILD_CUDA=OFF \
+            -DGPUFORGE_BUILD_TESTS=OFF
+        # This will fail to find CUDA/Torch (not installed) but must NOT fail
+        # due to CMake syntax errors.  We expect only "not found" warnings.
+        continue-on-error: true
+
+  # ── Docker build ─────────────────────────────────────────────────────────────
+  # Validates that the Dockerfile parses and the base image is accessible.
+  # Full GPU image build requires a self-hosted runner — not attempted here.
+  docker-build:
+    name: Docker build (CPU dev image)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build CPU development image
+        run: |
+          if [ -f docker/Dockerfile.dev ]; then
+            docker build -f docker/Dockerfile.dev --target cpu-dev . -t gpuforge:ci-test
+          else
+            echo "docker/Dockerfile.dev not yet created (Phase 8); skipping."
+          fi
+
+  # ── Documentation link check ─────────────────────────────────────────────────
+  doc-links:
+    name: Documentation link check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install lychee (link checker)
+        run: |
+          wget -q https://github.com/lycheeverse/lychee/releases/download/v0.15.1/lychee-v0.15.1-x86_64-unknown-linux-gnu.tar.gz
+          tar -xzf lychee-*.tar.gz
+          sudo mv lychee /usr/local/bin/
+      - name: Check links in README and docs/
+        run: |
+          lychee --no-progress --exclude "localhost" \
+            README.md docs/**/*.md || true
+        # Allow failure until all links are live.
+        continue-on-error: true
+
+# ── GPU benchmark note ───────────────────────────────────────────────────────
+# GitHub-hosted runners do NOT have NVIDIA GPUs.
+# GPU benchmarks are run manually on a machine with an NVIDIA GPU:
+#
+#   python benchmarks/bench_rmsnorm.py --output artifacts/results.json
+#
+# Results are stored as artifacts/ (gitignored) and summarised in
+# docs/benchmark-results.md for reproducibility.

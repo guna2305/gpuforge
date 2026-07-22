@@ -1,0 +1,61 @@
+# ── Python ────────────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyo
+.venv/
+venv/
+env/
+.env
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# ── Testing & coverage ────────────────────────────────────────────────────────
+.pytest_cache/
+.coverage
+htmlcov/
+.hypothesis/
+
+# ── Type checking ─────────────────────────────────────────────────────────────
+.mypy_cache/
+
+# ── C++ / CUDA build artifacts ────────────────────────────────────────────────
+*.o
+*.so
+*.a
+*.lib
+*.dll
+*.pyd
+_cmake_build/
+cmake-build-*/
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+Makefile
+
+# ── Benchmark & profiler artifacts (never committed — generated at runtime) ───
+artifacts/
+*.ncu-rep
+*.nsys-rep
+*.sqlite
+*.csv
+
+# ── IDE ───────────────────────────────────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# ── OS ────────────────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+
+# ── Docker / secrets ──────────────────────────────────────────────────────────
+.env.local
+.env.production
+secrets/
+
+# ── Triton cache ──────────────────────────────────────────────────────────────
+.triton/

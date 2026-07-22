@@ -1,0 +1,94 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "gpuforge"
+version = "0.1.0"
+description = "GPU Kernel Autotuning and LLM Inference Performance Platform"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "guna2305" }]
+keywords = ["cuda", "gpu", "pytorch", "triton", "llm", "inference", "performance"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Intended Audience :: Science/Research",
+  "License :: OSI Approved :: MIT License",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+
+# Core runtime deps — intentionally minimal so CPU-only installs work.
+dependencies = [
+  "torch>=2.3.0",
+  "numpy>=1.26",
+  "pydantic>=2.5",
+]
+
+[project.optional-dependencies]
+# GPU-specific: install only when a CUDA device is present.
+gpu = [
+  "triton>=2.3.0",      # Phase 2 — Triton kernels
+]
+# Developer tools: linting, type checking, testing.
+dev = [
+  "pytest>=8.0",
+  "pytest-cov>=5.0",
+  "hypothesis>=6.100",
+  "ruff>=0.4",
+  "mypy>=1.10",
+]
+# Database layer (Phase 7+).
+db = [
+  "sqlalchemy>=2.0",
+  "alembic>=1.13",
+  "asyncpg>=0.29",
+  "psycopg2-binary>=2.9",
+]
+# FastAPI backend (Phase 7+).
+api = [
+  "fastapi>=0.111",
+  "uvicorn[standard]>=0.30",
+  "redis>=5.0",
+]
+all = ["gpuforge[gpu,dev,db,api]"]
+
+[project.scripts]
+gpuforge-bench = "benchmarks.bench_rmsnorm:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["gpuforge*", "benchmarks*"]
+
+# ── pytest ────────────────────────────────────────────────────────────────────
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts   = "-v --tb=short"
+markers   = [
+  "gpu: requires a CUDA-capable NVIDIA GPU (skip on CPU-only runners)",
+]
+filterwarnings = [
+  "ignore::UserWarning",
+  "ignore::DeprecationWarning",
+]
+
+# ── ruff (lint + format) ─────────────────────────────────────────────────────
+[tool.ruff]
+target-version = "py310"
+line-length    = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "C4", "SIM"]
+ignore = ["E501"]  # line length handled by formatter
+
+# ── mypy ─────────────────────────────────────────────────────────────────────
+[tool.mypy]
+python_version      = "3.10"
+strict              = false
+ignore_missing_imports = true
+warn_return_any     = true
+warn_unused_configs = true
